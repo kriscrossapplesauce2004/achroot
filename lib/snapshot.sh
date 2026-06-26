@@ -11,7 +11,7 @@ _pick_compressor() {
 
 cmd_backup() {
 	need_root
-	_name=$1; _out=$2
+	_name=${1:-}; _out=${2:-}
 	require_chroot "$_name"
 	# don't back up a live, bind-mounted rootfs — we'd recurse into /dev, /sdcard!
 	if is_started "$_name"; then
@@ -32,7 +32,7 @@ cmd_backup() {
 
 cmd_restore() {
 	need_root
-	_file=$1; _name=$2
+	_file=${1:-}; _name=${2:-}
 	[ -f "$_file" ] || die "usage: achroot restore <backup.tar.*> <name>"
 	[ -n "$_name" ] || die "give a target name: achroot restore $_file <name>"
 	chroot_exists "$_name" && die "'$_name' already exists; remove it first"
@@ -43,7 +43,7 @@ cmd_restore() {
 
 cmd_clone() {
 	need_root
-	_src=$1; _dst=$2
+	_src=${1:-}; _dst=${2:-}
 	require_chroot "$_src"
 	[ -n "$_dst" ] || die "usage: achroot clone <src> <dst>"
 	chroot_exists "$_dst" && die "'$_dst' already exists"

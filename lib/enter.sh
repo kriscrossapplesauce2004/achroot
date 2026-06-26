@@ -21,7 +21,7 @@ _chroot_bin() { first_of chroot busybox || echo chroot ; }
 #
 # usage: enter_chroot NAME [--user USER] [-- COMMAND...]
 enter_chroot() {
-	_name=$1; shift
+	_name=${1:-}; [ $# -gt 0 ] && shift
 	require_chroot "$_name"
 	need_root
 
@@ -74,9 +74,27 @@ enter_chroot() {
 
 cmd_enter() { enter_chroot "$@" ; }
 
+# run a command inside the chroot and RETURN its exit status (no exec).
+# For internal/programmatic use (package installs, service setup, etc.).
+#   run_in_chroot NAME "shell command string"
+run_in_chroot() {
+	_name=${1:-}; [ $# -gt 0 ] && shift
+	require_chroot "$_name"
+	need_root
+	is_started "$_name" || start_chroot "$_name"
+	_rfs=$(rootfs_path "$_name")
+	_shell=$(find_shell "$_rfs") || die "no shell found inside '$_name' rootfs"
+	HOME=/root TERM=${TERM:-xterm} \
+		PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+		export HOME TERM PATH
+	dbg "in-chroot ($_name): $*"
+	# shellcheck disable=SC2046
+	$(ns_prefix) "$(_chroot_bin)" "$_rfs" "$_shell" -lc "$*"
+}
+
 # `achroot run NAME -- cmd...`  (non-interactive convenience wrapper)
 cmd_run() {
-	_name=$1; shift
+	_name=${1:-}; [ $# -gt 0 ] && shift
 	[ "${1:-}" = "--" ] && shift
 	[ $# -gt 0 ] || die "usage: achroot run NAME -- COMMAND [ARGS...]"
 	enter_chroot "$_name" -- "$@"
@@ -84,7 +102,7 @@ cmd_run() {
 
 # `achroot login USER NAME`  — enter as a non-root user
 cmd_login() {
-	_user=$1; _name=$2
+	_user=${1:-}; _name=${2:-}
 	[ -n "$_user" ] && [ -n "$_name" ] || die "usage: achroot login USER NAME"
 	enter_chroot "$_name" --user "$_user"
 }

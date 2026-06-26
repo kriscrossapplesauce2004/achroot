@@ -4,8 +4,8 @@ _achroot() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     cmds="doctor list installed install import create-image start stop stopall \
-          enter run login status remove backup restore clone binfmt gui selinux \
-          config update version help"
+          enter run login status ps pkg upgrade ssh boot remove backup restore \
+          clone binfmt gui selinux config update version help"
 
     # complete installed-chroot names for commands that take one
     local base="${ACH_BASE:-/data/local/achroot}"
@@ -18,7 +18,7 @@ _achroot() {
     fi
 
     case "$prev" in
-        enter|start|stop|status|remove|rm|backup|run|login|clone|gui)
+        enter|start|stop|status|remove|rm|backup|run|login|clone|gui|ps|pkg|upgrade|ssh|boot)
             COMPREPLY=( $(compgen -W "$names" -- "$cur") ); return ;;
         install|add)
             COMPREPLY=( $(compgen -W "alpine ubuntu debian devuan kali arch fedora void rocky alma opensuse gentoo mint" -- "$cur") ); return ;;
@@ -28,6 +28,12 @@ _achroot() {
             COMPREPLY=( $(compgen -W "status permissive enforcing" -- "$cur") ); return ;;
         config)
             COMPREPLY=( $(compgen -W "show init set edit path" -- "$cur") ); return ;;
+    esac
+    # second-level actions
+    case "${COMP_WORDS[1]}" in
+        gui)  COMPREPLY=( $(compgen -W "setup start stop vnc x11 audio xfce lxqt lxde mate" -- "$cur") ); return ;;
+        ssh)  COMPREPLY=( $(compgen -W "start stop info" -- "$cur") ); return ;;
+        boot) COMPREPLY=( $(compgen -W "enable disable status" -- "$cur") ); return ;;
     esac
     COMPREPLY=( $(compgen -W "$names" -- "$cur") )
 }

@@ -54,8 +54,16 @@ that actually bite you:
   (e.g. run an **amd64** Kali on an **arm64** phone).
 - **Storage passthrough** — internal storage at `/sdcard`, external/OTG at
   `/storage`, plus arbitrary `ACH_EXTRA_BINDS`.
-- **GUI bootstrap** — VNC, X11 (Termux:X11), and PulseAudio launchers written
-  straight into the chroot.
+- **One-command desktops** — `gui setup` auto-installs XFCE/LXQt/LXDE/MATE + a
+  VNC server using the distro's own package manager; `gui start` brings it up and
+  hands you a `127.0.0.1:5901` address. Plus X11 (Termux:X11) and PulseAudio routing.
+- **SSH in from your PC** — `achroot ssh <name>` installs and starts `sshd`,
+  enables root login on a non-conflicting port, and prints the exact `ssh` command.
+- **Boot autostart** — `achroot boot <name> enable` drops a Magisk/KernelSU/APatch
+  `service.d` script so a chroot (optionally with `sshd`) comes up at boot.
+- **Package manager abstraction** — `pkg`/`upgrade` work the same across
+  apt/pacman/apk/dnf/xbps/zypper (Arch keyring is auto-initialised).
+- **Process inspection** — `achroot ps <name>` lists what's running inside.
 - **Image mode** — fixed-size ext4 loop images, ideal for FAT/exFAT SD cards.
 - **Backup / restore / clone** with automatic best-available compression.
 - **Multiple chroots side by side**, each with metadata and per-chroot start hooks.
@@ -100,11 +108,17 @@ achroot doctor
 | `achroot enter <name> [-- cmd…]` | interactive shell or run a command |
 | `achroot run <name> -- cmd…` | non-interactive command |
 | `achroot login <user> <name>` | enter as a non-root user |
-| `achroot status [name]` | mounts + metadata |
+| `achroot pkg <name> <pkgs…>` | install packages (any distro) |
+| `achroot upgrade <name>` | full system upgrade |
+| `achroot gui <name> setup [de]` | auto-install a desktop + VNC |
+| `achroot gui <name> start [vnc\|x11]` | start the graphical session |
+| `achroot ssh <name> [start\|stop\|info]` | SSH server in the chroot |
+| `achroot boot <name> [enable\|disable]` | autostart at device boot |
+| `achroot ps <name>` | processes running inside |
+| `achroot status [name]` | mounts + metadata + size |
 | `achroot remove <name>` | delete (must be stopped) |
 | `achroot backup \| restore \| clone` | snapshots & duplication |
 | `achroot binfmt on <arch> [name]` | QEMU foreign-arch support |
-| `achroot gui <name> [vnc\|x11\|audio]` | desktop bootstrap |
 | `achroot selinux [status\|permissive\|enforcing]` | SELinux control |
 | `achroot config [show\|set K V\|edit]` | settings |
 
@@ -118,13 +132,22 @@ sh achroot enter mykali
 ```
 *(needs a static `qemu-x86_64` on the device — e.g. a qemu-user-static Magisk module)*
 
-**Desktop over VNC**
+**Turnkey desktop over VNC** (auto-installs everything)
 ```sh
 sh achroot install debian
-sh achroot gui debian vnc
-sh achroot enter debian
-apt update && apt install -y tigervnc-standalone-server xfce4 xfce4-goodies dbus-x11
-vnc          # then connect a VNC viewer to 127.0.0.1:5901
+sh achroot gui debian setup xfce     # installs XFCE + tigervnc via apt
+sh achroot gui debian start          # -> connect a VNC viewer to 127.0.0.1:5901
+```
+
+**SSH into the chroot from your laptop**
+```sh
+sh achroot ssh debian                # installs+starts sshd, prints the ssh command
+# ssh root@<phone-ip> -p 8022   (password: achroot, or set ACH_SSH_PASS)
+```
+
+**Start a chroot (and sshd) automatically at boot**
+```sh
+ACH_BOOT_SSH=1 sh achroot boot debian enable   # Magisk/KernelSU service.d
 ```
 
 **Use an SD card formatted exFAT**

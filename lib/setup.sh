@@ -105,7 +105,7 @@ cmd_selinux() {
 # --- orchestration: bring a chroot fully up --------------------------------
 
 start_chroot() {
-	_name=$1
+	_name=${1:-}
 	require_chroot "$_name"
 	need_root
 	log_step "Starting '$_name'"
@@ -121,10 +121,10 @@ start_chroot() {
 	log_ok "'$_name' is up. Enter it with:  achroot enter $_name"
 }
 
-cmd_start() { start_chroot "$1" ; }
+cmd_start() { start_chroot "${1:-}" ; }
 
 cmd_stop() {
-	_name=$1
+	_name=${1:-}
 	require_chroot "$_name"
 	need_root
 	log_step "Stopping '$_name'"

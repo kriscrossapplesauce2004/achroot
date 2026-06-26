@@ -204,7 +204,7 @@ _flatten_if_nested() {
 
 cmd_install() {
 	need_root
-	_spec=$1; _name=$2
+	_spec=${1:-}; _name=${2:-}
 	[ -n "$_spec" ] || { distro_list; exit 1; }
 	# split id:release
 	_id=$(printf '%s' "$_spec" | cut -d: -f1)
@@ -275,7 +275,7 @@ _rootfs_arch_note() {
 
 cmd_import() {
 	need_root
-	_file=$1; _name=$2
+	_file=${1:-}; _name=${2:-}
 	[ -f "$_file" ] || die "usage: achroot import <rootfs.tar[.gz|.xz|.zst]> <name>"
 	[ -n "$_name" ] || die "give a name: achroot import $_file <name>"
 	chroot_exists "$_name" && die "chroot '$_name' already exists"
@@ -301,7 +301,7 @@ cmd_import() {
 
 cmd_create_image() {
 	need_root
-	_name=$1; _size=$2
+	_name=${1:-}; _size=${2:-}
 	[ -n "$_name" ] && [ -n "$_size" ] || die "usage: achroot create-image <name> <size, e.g. 4G>"
 	chroot_exists "$_name" && die "chroot '$_name' already exists"
 	_mkfs=$(first_of mkfs.ext4 mke2fs make_ext4fs) || \
@@ -351,7 +351,7 @@ cmd_installed() {
 
 cmd_remove() {
 	need_root
-	_name=$1
+	_name=${1:-}
 	require_chroot "$_name"
 	# never delete while mounted (could nuke /dev, /sdcard via bind mounts!)
 	if is_started "$_name"; then
@@ -370,7 +370,7 @@ cmd_remove() {
 }
 
 cmd_status() {
-	_name=$1
+	_name=${1:-}
 	if [ -z "$_name" ]; then cmd_installed; return; fi
 	require_chroot "$_name"
 	log_step "Status: $_name"
@@ -379,8 +379,16 @@ cmd_status() {
 	printf '  mode   : %s\n' "$(meta_get "$_name" mode)"
 	printf '  path   : %s\n' "$(rootfs_path "$_name")"
 	printf '  created: %s\n' "$(meta_get "$_name" created 2>/dev/null)"
+	printf '  size   : %s\n' "$(du -sh "$(rootfs_path "$_name")" 2>/dev/null | cut -f1 || echo '?')"
 	if is_started "$_name"; then
 		printf '  state  : %brunning%b\n' "$C_GRN" "$C_RESET"
+		# count processes whose root is inside this chroot
+		_rp=$(_realpath "$(rootfs_path "$_name")"); _pc=0
+		for _pp in /proc/[0-9]*; do
+			_pr=$(readlink "$_pp/root" 2>/dev/null) || continue
+			case "$_pr" in "$_rp"|"$_rp"/*) _pc=$((_pc+1)) ;; esac
+		done
+		printf '  procs  : %s\n' "$_pc"
 		printf '  mounts :\n'
 		chroot_mounts "$_name" | sed 's/^/           /'
 	else

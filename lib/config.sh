@@ -127,7 +127,7 @@ cmd_config() {
 		init|write) save_config ;;
 		set)
 			shift
-			[ -n "$1" ] || die "usage: achroot config set KEY VALUE"
+			[ -n "${1:-}" ] || die "usage: achroot config set KEY VALUE"
 			_key=$1; shift; _val="$*"
 			# only allow known keys
 			case "$_key" in

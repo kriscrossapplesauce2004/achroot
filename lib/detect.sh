@@ -174,6 +174,24 @@ host_busybox() { first_of busybox 2>/dev/null ; }
 host_downloader() { first_of curl wget ; }
 host_tar() { first_of tar ; }
 
+# best-effort LAN IP of the device (for SSH-in from your PC)
+device_ip() {
+	if have ip; then
+		_v=$(ip -4 -o addr show 2>/dev/null \
+			| awk '$2!="lo"{split($4,a,"/"); print a[1]}' \
+			| grep -v '^127\.' | head -1)
+		[ -n "$_v" ] && { printf '%s\n' "$_v"; return 0; }
+	fi
+	for _i in wlan0 eth0 rmnet0 rmnet_data0; do
+		_v=$(gp "dhcp.$_i.ipaddress")
+		case "$_v" in *.*.*.*) printf '%s\n' "$_v"; return 0 ;; esac
+	done
+	if have ifconfig; then
+		ifconfig 2>/dev/null | awk '/inet addr:/{sub(/addr:/,"",$2); print $2} /inet /{print $2}' \
+			| grep -v '^127\.' | head -1
+	fi
+}
+
 # Quick connectivity probe (returns 0 if we can likely reach the internet)
 net_reachable() {
 	if have ping; then ping -c1 -W2 1.1.1.1 >/dev/null 2>&1 && return 0; fi

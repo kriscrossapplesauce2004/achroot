@@ -52,7 +52,7 @@ _find_qemu() {
 }
 
 cmd_binfmt() {
-	_action=$1; shift 2>/dev/null
+	_action=${1:-status}; [ $# -gt 0 ] && shift
 	case "$_action" in
 		status|"")
 			log_step "binfmt_misc status"
@@ -68,9 +68,9 @@ cmd_binfmt() {
 			;;
 		on|register)
 			need_root
-			_arch=$1
+			_arch=${1:-}
 			[ -n "$_arch" ] || die "usage: achroot binfmt on <arch>  (amd64|i386|arm64|armhf) [chroot-name]"
-			_name=$2
+			_name=${2:-}
 			binfmt_mount
 			_qn=$(_qemu_name "$_arch") || die "unsupported arch '$_arch'"
 			_qbin=$(_find_qemu "$_qn") || die "static $_qn not found on host. Install qemu-user-static (e.g. a Magisk module) and retry."
@@ -94,7 +94,7 @@ cmd_binfmt() {
 			;;
 		off|unregister)
 			need_root
-			_arch=$1
+			_arch=${1:-}
 			if [ -n "$_arch" ]; then
 				_qn=$(_qemu_name "$_arch") || die "unsupported arch '$_arch'"
 				[ -e "/proc/sys/fs/binfmt_misc/$_qn" ] && \

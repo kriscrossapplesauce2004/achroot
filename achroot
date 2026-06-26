@@ -26,7 +26,7 @@ done
 [ -f "$ACH_LIB/common.sh" ] || { echo "achroot: cannot find library at $ACH_LIB (corrupt checkout?)" >&2; exit 1; }
 
 # --- source modules --------------------------------------------------------
-for _m in common config detect mount setup enter distros binfmt gui snapshot doctor; do
+for _m in common config detect mount setup enter pkg distros binfmt gui services snapshot doctor; do
 	# shellcheck disable=SC1090
 	. "$ACH_LIB/$_m.sh" || { echo "achroot: failed to load $_m.sh" >&2; exit 1; }
 done
@@ -69,10 +69,22 @@ ${C_BOLD}LIFECYCLE${C_RESET}
   stop <name> / stopall          unmount cleanly (kills inside-procs first)
   remove <name>                  delete a chroot (must be stopped)
 
+${C_BOLD}SOFTWARE${C_RESET}
+  pkg <name> <pkgs...>           install packages (auto-detects apt/pacman/apk/dnf/xbps/zypper)
+  upgrade <name>                 full system upgrade inside the chroot
+
+${C_BOLD}GRAPHICAL${C_RESET}
+  gui <name> setup [de]          auto-install a desktop (xfce|lxqt|lxde|mate) + VNC server
+  gui <name> start [vnc|x11]     start the session; connect a VNC viewer to 127.0.0.1:5901
+  gui <name> stop                stop the graphical session
+  gui <name> [vnc|x11|audio]     just (re)write launcher scripts / PulseAudio routing
+
 ${C_BOLD}POWER FEATURES${C_RESET}
+  ssh <name> [start|stop|info]   install + run sshd so you can SSH in from your PC
+  boot <name> [enable|disable]   auto-start a chroot at device boot (Magisk/KernelSU service.d)
+  ps <name>                      list processes running inside the chroot
   binfmt on <arch> [name]        run foreign-arch chroots via QEMU (amd64 on arm64, etc.)
   binfmt status | off [arch]     manage QEMU binfmt_misc handlers
-  gui <name> [vnc|x11|audio]     bootstrap a desktop / X11 / PulseAudio
   backup <name> [file]           snapshot a chroot to a compressed tarball
   restore <file> <name>          rebuild a chroot from a backup
   clone <src> <dst>              duplicate a chroot
@@ -137,6 +149,11 @@ case "$_cmd" in
 	run|exec)              cmd_run "$@" ;;
 	login)                 cmd_login "$@" ;;
 	status|info)           cmd_status "$@" ;;
+	ps|top)                cmd_ps "$@" ;;
+	pkg|install-pkg)       cmd_pkg "$@" ;;
+	upgrade|update-pkgs)   cmd_upgrade "$@" ;;
+	ssh)                   cmd_ssh "$@" ;;
+	boot|autostart)        cmd_boot "$@" ;;
 	remove|rm|delete)      cmd_remove "$@" ;;
 	backup|snapshot)       cmd_backup "$@" ;;
 	restore)               cmd_restore "$@" ;;
