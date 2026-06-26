@@ -64,10 +64,7 @@ R() {
 	esac
 }
 
-case "$ELEVATE" in
-	none) is_root && info "running as root" || warn "not root and no sudo/doas/su found — will install to a user dir" ;;
-	*)    info "privilege escalation: ${c_b}$ELEVATE${c_r}" ;;
-esac
+is_root && info "running as root"
 
 # --- environment detection -------------------------------------------------
 OS=linux; FLAVOR=generic
@@ -91,18 +88,15 @@ have gzip || have busybox || warn "no gzip found; relying on tar's built-in gzip
 
 fetch() { # fetch URL DEST
 	_u=$1; _d=$2
+	_auth=""; [ -n "${ACHROOT_TOKEN:-}" ] && _auth="Authorization: Bearer $ACHROOT_TOKEN"
 	if [ "$DL" = curl ]; then
-		if [ -n "${ACHROOT_TOKEN:-}" ]; then
-			curl -fSL --retry 3 -H "Authorization: Bearer $ACHROOT_TOKEN" -o "$_d" "$_u"
-		else
-			curl -fSL --retry 3 -o "$_d" "$_u"
-		fi
+		# clean progress bar on a tty, otherwise quiet (but still report errors)
+		if [ -t 2 ]; then _p="-#"; else _p="-sS"; fi
+		if [ -n "$_auth" ]; then curl -fL $_p --retry 3 -H "$_auth" -o "$_d" "$_u"
+		else curl -fL $_p --retry 3 -o "$_d" "$_u"; fi
 	else
-		if [ -n "${ACHROOT_TOKEN:-}" ]; then
-			wget --header="Authorization: Bearer $ACHROOT_TOKEN" -O "$_d" "$_u"
-		else
-			wget -O "$_d" "$_u"
-		fi
+		if [ -n "$_auth" ]; then wget --header="$_auth" -O "$_d" "$_u"
+		else wget -O "$_d" "$_u"; fi
 	fi
 }
 
@@ -121,6 +115,23 @@ choose_dest() {
 }
 DEST=$(choose_dest)
 
+# Only escalate privileges when the install location actually requires it.
+# (On an Android root shell you're already root; on Linux/Termux the default
+#  dir is user-writable, so no sudo prompt is triggered.)
+need_priv_for() {
+	_d=$1
+	while [ ! -e "$_d" ] && [ "$_d" != / ] && [ "$_d" != . ]; do _d=$(dirname "$_d"); done
+	[ -w "$_d" ] && return 1 || return 0
+}
+USE_ROOT=0
+if need_priv_for "$DEST"; then
+	if is_root; then USE_ROOT=0
+	elif [ "$ELEVATE" != none ]; then USE_ROOT=1; info "using ${c_b}$ELEVATE${c_r} (need root to write $DEST)"
+	else die "need root to write $DEST and no sudo/doas/su found — set ACHROOT_DIR to a writable path, or run as root"
+	fi
+fi
+maybe_root() { if [ "$USE_ROOT" = 1 ]; then R "$@"; else "$@"; fi ; }
+
 # --- download + extract ----------------------------------------------------
 step "Downloading achroot ($BRANCH)"
 TMP="${TMPDIR:-/tmp}/achroot-install.$$"
@@ -136,16 +147,16 @@ SRCDIR=$(ls -d "$TMP"/${REPO##*/}-* 2>/dev/null | head -1)
 [ -d "$SRCDIR" ] && [ -f "$SRCDIR/achroot" ] || die "unexpected archive layout"
 
 if [ -d "$DEST/lib" ]; then info "updating existing install"; fi
-R mkdir -p "$DEST" || die "could not create $DEST"
-R cp -a "$SRCDIR"/. "$DEST"/ || die "could not copy files into $DEST (permissions?)"
-R chmod 755 "$DEST/achroot" "$DEST/install.sh" "$DEST/get.sh" 2>/dev/null
+maybe_root mkdir -p "$DEST" || die "could not create $DEST"
+maybe_root cp -a "$SRCDIR"/. "$DEST"/ || die "could not copy files into $DEST (permissions?)"
+maybe_root chmod 755 "$DEST/achroot" "$DEST/install.sh" "$DEST/get.sh" 2>/dev/null
 ok "files installed in $DEST"
 
 # --- launcher on PATH ------------------------------------------------------
 LAUNCHER=""
 if [ "${ACHROOT_NO_PATH:-0}" != 1 ]; then
 	step "Creating launcher on PATH"
-	if R sh "$DEST/install.sh" >/tmp/achroot-install.log 2>&1; then
+	if maybe_root sh "$DEST/install.sh" >/tmp/achroot-install.log 2>&1; then
 		LAUNCHER=$(grep -m1 'Installed launcher:' /tmp/achroot-install.log 2>/dev/null | sed 's/.*: //')
 		ok "launcher created${LAUNCHER:+: $LAUNCHER}"
 	else

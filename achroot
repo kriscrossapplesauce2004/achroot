@@ -38,7 +38,7 @@ cmd_update() {
 		( cd "$ACH_HOME" && git pull --ff-only ) && log_ok "up to date" || log_warn "git pull failed"
 	else
 		log_warn "not a git checkout (or git missing). Re-clone to update:"
-		log_info "  git clone <repo> && cd achroot && sh achroot doctor"
+		log_info "  curl -fsSL https://raw.githubusercontent.com/kriscrossapplesauce2004/achroot/master/get.sh | sh"
 	fi
 }
 
