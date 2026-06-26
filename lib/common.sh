@@ -54,9 +54,18 @@ first_of() {
 
 is_root() { [ "$(id -u 2>/dev/null || echo 1)" = "0" ] ; }
 
+# echo the best privilege-escalation command for the current host
+root_hint() {
+	_c="sh ${ACH_SELF:-achroot} ${ACH_ARGV:-doctor}"
+	if have sudo; then printf 'sudo %s\n' "$_c"
+	elif have doas; then printf 'doas %s\n' "$_c"
+	elif have su; then printf "su -c '%s'\n" "$_c"
+	else printf '(become root, then) %s\n' "$_c"; fi
+}
+
 need_root() {
 	is_root && return 0
-	die "this needs root. Open your root shell (su) and re-run, e.g.:  su -c 'sh ${ACH_SELF:-achroot} ${ACH_ARGV:-doctor}'"
+	die "this needs root. Re-run as root, e.g.:  $(root_hint)"
 }
 
 # run CMD... — log then execute (honors ACH_DRYRUN)

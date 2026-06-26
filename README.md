@@ -8,13 +8,23 @@ in a chroot, with networking, storage, optionally a desktop, optionally running 
 *foreign* CPU architecture. `achroot` does all of it, detects your device, and works
 around the Android-specific traps that make this annoying by hand.
 
+**Install (one command):**
+
 ```sh
-git clone <repo> achroot
-cd achroot
-su -c 'sh achroot doctor'          # scan the device
-su -c 'sh achroot install debian'  # download + unpack Debian
-su -c 'sh achroot enter debian'    # you're in
+curl -fsSL https://raw.githubusercontent.com/kriscrossapplesauce2004/achroot/master/get.sh | sh
 ```
+
+The installer detects your environment (root / `sudo` / `doas` / `su`, Android vs
+Termux vs Linux, downloader, arch), drops achroot somewhere persistent, and puts a
+launcher on your PATH. Then, from your **root shell**:
+
+```sh
+achroot doctor            # scan the device
+achroot install debian    # download + unpack Debian
+achroot enter debian      # you're in
+```
+
+Prefer git? `git clone https://github.com/kriscrossapplesauce2004/achroot && sh achroot/achroot doctor`.
 
 No dependencies beyond what a rooted Android already has (a shell, `mount`,
 `chroot`, `tar`, and `curl`/`wget` — busybox/toybox cover these). Pure POSIX `sh`,
