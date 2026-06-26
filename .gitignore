@@ -1,0 +1,10 @@
+# achroot runtime artifacts (in case someone runs it inside the checkout)
+*.log
+/distros/
+/logs/
+/tmp/
+config
+*.tar.gz
+*.tar.xz
+*.tar.zst
+*.img

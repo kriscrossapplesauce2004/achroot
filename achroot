@@ -1,0 +1,152 @@
+#!/bin/sh
+# achroot — a friendly, powerful chroot manager for rooted Android (and Linux).
+# POSIX sh. Run from your root shell:  su -c 'sh achroot ...'
+# https://github.com/  (git clone && sh achroot doctor)
+set -u
+
+ACH_VERSION="1.0.0"
+
+# --- locate ourselves & our library ---------------------------------------
+ACH_SELF=$0
+ACH_ARGV=$*
+_self_dir() {
+	# resolve the directory containing this script (no readlink -f dependency)
+	_d=$(dirname -- "$ACH_SELF" 2>/dev/null) || _d=.
+	( CDPATH= cd -- "$_d" 2>/dev/null && pwd -P ) 2>/dev/null || printf '%s\n' "$_d"
+}
+ACH_HOME=$(_self_dir)
+
+# find lib/ — alongside the script, or in standard install locations
+for _cand in "$ACH_HOME/lib" "$ACH_HOME/../lib/achroot" \
+             /data/local/share/achroot/lib /usr/local/share/achroot/lib \
+             /usr/share/achroot/lib; do
+	if [ -f "$_cand/common.sh" ]; then ACH_LIB=$_cand; break; fi
+done
+: "${ACH_LIB:=$ACH_HOME/lib}"
+[ -f "$ACH_LIB/common.sh" ] || { echo "achroot: cannot find library at $ACH_LIB (corrupt checkout?)" >&2; exit 1; }
+
+# --- source modules --------------------------------------------------------
+for _m in common config detect mount setup enter distros binfmt gui snapshot doctor; do
+	# shellcheck disable=SC1090
+	. "$ACH_LIB/$_m.sh" || { echo "achroot: failed to load $_m.sh" >&2; exit 1; }
+done
+
+# --- self-update (only meaningful inside a git checkout) -------------------
+cmd_update() {
+	if [ -d "$ACH_HOME/.git" ] && have git; then
+		log_step "Updating achroot (git pull in $ACH_HOME)"
+		( cd "$ACH_HOME" && git pull --ff-only ) && log_ok "up to date" || log_warn "git pull failed"
+	else
+		log_warn "not a git checkout (or git missing). Re-clone to update:"
+		log_info "  git clone <repo> && cd achroot && sh achroot doctor"
+	fi
+}
+
+cmd_help() {
+	cat >&2 <<EOF
+${C_BOLD}achroot $ACH_VERSION${C_RESET} — chroot manager for rooted Android (and Linux)
+
+${C_BOLD}USAGE${C_RESET}
+  sh achroot [global-opts] <command> [args]
+  (on Android run it from a root shell, e.g.  su -c 'sh achroot doctor')
+
+${C_BOLD}GETTING STARTED${C_RESET}
+  achroot doctor                 deep environment scan + health checks
+  achroot list                   show installable distros
+  achroot install debian         download + unpack a Debian rootfs (named "debian")
+  achroot enter debian           start it (auto-mounts) and drop into a shell
+
+${C_BOLD}LIFECYCLE${C_RESET}
+  install <id>[:rel] [name]      fetch & set up a distro     (alpine ubuntu debian kali arch fedora void ...)
+  import <tarball> <name>        create a chroot from a local rootfs tarball
+  create-image <name> <size>     make an ext4 loop image (for FAT/exFAT SD cards), e.g. 4G
+  installed                      list your chroots and their state
+  start <name>                   mount + configure (idempotent)
+  enter <name> [-- cmd...]       enter interactively, or run a command
+  run <name> -- cmd...           run a command non-interactively
+  login <user> <name>            enter as a non-root user
+  status [name]                  show mounts & metadata
+  stop <name> / stopall          unmount cleanly (kills inside-procs first)
+  remove <name>                  delete a chroot (must be stopped)
+
+${C_BOLD}POWER FEATURES${C_RESET}
+  binfmt on <arch> [name]        run foreign-arch chroots via QEMU (amd64 on arm64, etc.)
+  binfmt status | off [arch]     manage QEMU binfmt_misc handlers
+  gui <name> [vnc|x11|audio]     bootstrap a desktop / X11 / PulseAudio
+  backup <name> [file]           snapshot a chroot to a compressed tarball
+  restore <file> <name>          rebuild a chroot from a backup
+  clone <src> <dst>              duplicate a chroot
+  selinux [status|permissive|enforcing]
+
+${C_BOLD}CONFIG${C_RESET}
+  config [show|init|set K V|edit]   view/change settings (base dir, DNS, binds, ...)
+  update                            git pull if this is a checkout
+
+${C_BOLD}GLOBAL OPTIONS${C_RESET}
+  -y, --yes        assume yes to prompts        --base DIR   override storage base
+  --debug          verbose internal logging     --dry-run    print actions, don't run
+  --no-color       disable color                -V           print version
+
+${C_BOLD}NOTES${C_RESET}
+  • Default base: ${ACH_BASE}
+  • achroot auto-handles the Magisk/KernelSU "private mount namespace" issue using
+    nsenter, so your chroot doesn't vanish when the su shell exits.
+  • SELinux Enforcing devices: achroot can flip Permissive while a chroot runs.
+EOF
+}
+
+# --- global option parsing (before the subcommand) ------------------------
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-y|--yes)     ACH_YES=1; shift ;;
+		-q|--quiet)   ACH_QUIET=1; ACH_COLOR=${ACH_COLOR:-auto}; shift ;;
+		--debug)      ACH_DEBUG=1; shift ;;
+		--dry-run)    ACH_DRYRUN=1; shift ;;
+		--no-color)   ACH_COLOR=off; shift ;;
+		--color)      ACH_COLOR=always; shift ;;
+		--base)       ACH_BASE=$2; shift 2 ;;
+		--base=*)     ACH_BASE=${1#--base=}; shift ;;
+		-V|--version) echo "achroot $ACH_VERSION"; exit 0 ;;
+		-h|--help|help|"") _cmd=help; shift; break ;;
+		--) shift; break ;;
+		-*) echo "achroot: unknown option '$1' (try: achroot help)" >&2; exit 2 ;;
+		*) break ;;
+	esac
+done
+# re-evaluate colors in case flags changed the setting
+_ach_setup_colors
+
+# load config now that --base/env are known
+load_config
+
+# --- dispatch --------------------------------------------------------------
+_cmd=${_cmd:-${1:-help}}
+[ "$#" -gt 0 ] && [ "$_cmd" = "$1" ] && shift
+
+case "$_cmd" in
+	doctor|diag|check)     cmd_doctor "$@" ;;
+	list|distros)          distro_list ;;
+	installed|ls)          cmd_installed ;;
+	install|add)           cmd_install "$@" ;;
+	import)                cmd_import "$@" ;;
+	create-image|mkimage)  cmd_create_image "$@" ;;
+	start|up)              cmd_start "$@" ;;
+	stop|down)             cmd_stop "$@" ;;
+	stopall|down-all)      cmd_stopall ;;
+	enter|shell|sh)        cmd_enter "$@" ;;
+	run|exec)              cmd_run "$@" ;;
+	login)                 cmd_login "$@" ;;
+	status|info)           cmd_status "$@" ;;
+	remove|rm|delete)      cmd_remove "$@" ;;
+	backup|snapshot)       cmd_backup "$@" ;;
+	restore)               cmd_restore "$@" ;;
+	clone|dup)             cmd_clone "$@" ;;
+	binfmt|qemu)           cmd_binfmt "$@" ;;
+	gui|desktop)           cmd_gui "$@" ;;
+	selinux)               cmd_selinux "$@" ;;
+	config|cfg)            cmd_config "$@" ;;
+	update|self-update)    cmd_update "$@" ;;
+	version|--version)     echo "achroot $ACH_VERSION" ;;
+	help|--help|-h)        cmd_help ;;
+	*) log_err "unknown command '$_cmd'"; cmd_help; exit 2 ;;
+esac
